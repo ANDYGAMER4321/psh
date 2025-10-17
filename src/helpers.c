@@ -4,6 +4,16 @@
 
 volatile sig_atomic_t SIGNAL = 0;
 
+//Added for reverse search
+char* get_current_input() {
+    static char empty[] = "";
+    return empty;
+}
+int get_keypress() {
+    return getchar();
+}
+
+
 void free_double_pointer(char **array)
 {
     if (array == NULL)

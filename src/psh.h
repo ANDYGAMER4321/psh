@@ -2,6 +2,20 @@
 #ifndef PSH_H
 #define PSH_H
 
+//for reverse search
+#define CTRL_R 18
+#define CTRL_S 19
+#define CTRL_G 7
+#define ENTER_KEY 10
+
+//for reverse search
+#define CTRL_R 18
+#define CTRL_S 19
+#define CTRL_G 7
+#define ENTER_KEY 10
+#define ESC_KEY 27
+#define RIGHT_ARROW 'C'  // Already defined as ARROW_RIGHT, but need this specific name
+
 // Our Headers
 #include "builtin.h"
 #include "colors.h"
@@ -70,6 +84,15 @@ typedef struct HashMap
     int size;
 } HashMap;
 
+//Adding the reverse search structure
+typedef struct {
+    int active;
+    char query[256];
+    int query_len;
+    int current_match;
+    char *original_input;
+} reverse_search_state_t;
+
 // extern char **token_arr;
 
 // Global Variables
@@ -91,6 +114,10 @@ extern char *history[PATH_MAX];
 extern int history_count;
 extern int current_history;
 
+
+extern reverse_search_state_t search_state; //adding the reverse search extern
+
+
 // Function Declarations
 
 // main.c functions
@@ -107,7 +134,17 @@ void process_commands(char *, int *);
 void execute_command(char **, int *);
 int kbhit();
 
+//reverse search functions
+char* reverse_search();
+void display_search_interface();
+void handle_search_keypress(int key);
+int find_next_match(const char *query, int start_index, int backward);
+
 // helper functions
+int get_keypress();
+char* get_current_input();
+
+
 void free_double_pointer(char **array);
 void remove_last_component(char *);
 void get_last_path_component(const char *, char *);

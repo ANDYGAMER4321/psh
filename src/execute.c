@@ -10,6 +10,9 @@ char *history[PATH_MAX];
 int history_count = 0;
 int current_history = -1;
 
+//reverse search variables initialization
+reverse_search_state_t search_state = {0};
+
 // Helper function to split the input line by ';'
 char **split_commands(char *input)
 {
@@ -376,6 +379,19 @@ void handle_input(char **inputline, size_t *n, const char *PATH)
                 printf("%s", buffer);
                 fflush(stdout);
             }
+
+            //Adding  CTRL R Detection
+            else if (ch == CTRL_R) {
+                char *result = reverse_search();
+                strcpy(buffer, result);
+                pos = strlen(buffer);
+                cursor = pos;
+                free(result);
+                printf("\r\033[K");
+                print_prompt(PATH);
+                printf("%s", buffer);
+                fflush(stdout);
+            }
             else
             {
                 if (pos < MAX_LINE_LENGTH - 1)
@@ -614,5 +630,123 @@ void execute_command(char **token_arr, int *run)
             // func to handle wildcards
             handle_wildcard(token_arr[1]);
         }
+    }
+}
+
+char* reverse_search() {
+    search_state.active = 1;
+    search_state.query[0] = '\0';
+    search_state.query_len = 0;
+    search_state.current_match = -1;
+    
+    if (search_state.original_input) free(search_state.original_input);
+    search_state.original_input = strdup("");
+    
+    while (search_state.active) {
+        display_search_interface();
+        int key = get_keypress();
+        handle_search_keypress(key);
+    }
+    
+    if (search_state.current_match >= 0) {
+        return strdup(history[search_state.current_match]);
+    } else {
+        return strdup(search_state.original_input);
+    }
+}
+
+void display_search_interface() {
+    printf("\r\x1b[K");
+    
+    if (search_state.current_match >= 0) {
+        printf("(reverse-i-search)`%s': %s", 
+               search_state.query, 
+               history[search_state.current_match]);
+    } else if (search_state.query_len > 0) {
+        printf("(failed reverse-i-search)`%s': %s", 
+               search_state.query, search_state.original_input);
+    } else {
+        printf("(reverse-i-search)`': ");
+    }
+    
+    fflush(stdout);
+}
+
+int find_next_match(const char *query, int start_index, int backward) {
+    if (query[0] == '\0' || history_count == 0) return -1;
+    
+    int direction = backward ? -1 : 1;
+    int index = start_index;
+    
+    if (index < 0) index = history_count - 1;
+    if (index >= history_count) index = history_count - 1;
+    
+    for (int i = 0; i < history_count; i++) {
+        index = (index + direction + history_count) % history_count;
+        
+        if (history[index] && strstr(history[index], query) != NULL) {
+            return index;
+        }
+    }
+    
+    return -1;
+}
+
+void handle_search_keypress(int key) {
+    switch (key) {
+        case CTRL_R:
+            if (search_state.query_len > 0) {
+                int next_match = find_next_match(search_state.query, 
+                                               search_state.current_match, 1);
+                if (next_match != -1) {
+                    search_state.current_match = next_match;
+                }
+            }
+            break;
+            
+        case CTRL_S:
+        // CTRL+S is often used for terminal flow control, so it might not work reliably
+        // Let's use a different approach - use SHIFT key or just rely on CTRL+R
+            if (search_state.query_len > 0) {
+                int next_match = find_next_match(search_state.query,
+                                            search_state.current_match, 0);
+                if (next_match != -1) {
+                    search_state.current_match = next_match;
+                }
+        }
+        break;
+            
+        case BACKSPACE:
+            if (search_state.query_len > 0) {
+                search_state.query[--search_state.query_len] = '\0';
+                search_state.current_match = find_next_match(search_state.query, 
+                                                           history_count - 1, 1);
+            }
+            break;
+            
+        case ENTER_KEY:
+            search_state.active = 0;
+            break;
+            
+        case ESC_KEY:
+        case CTRL_G:
+            search_state.current_match = -1;
+            search_state.active = 0;
+            break;
+            
+        case RIGHT_ARROW:
+            if (search_state.current_match >= 0) {
+                search_state.active = 0;
+            }
+            break;
+            
+        default:
+            if (key >= 32 && key <= 126 && search_state.query_len < 255) {
+                search_state.query[search_state.query_len++] = key;
+                search_state.query[search_state.query_len] = '\0';
+                search_state.current_match = find_next_match(search_state.query,
+                                                           history_count - 1, 1);
+            }
+            break;
     }
 }
