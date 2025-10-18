@@ -16,6 +16,11 @@
 #define ESC_KEY 27
 #define RIGHT_ARROW 'C'  // Already defined as ARROW_RIGHT, but need this specific name
 
+//for VIM
+#define CTRL_O 15
+#define VIM_NORMAL 0
+#define VIM_INSERT 1
+
 // Our Headers
 #include "builtin.h"
 #include "colors.h"
@@ -93,6 +98,17 @@ typedef struct {
     char *original_input;
 } reverse_search_state_t;
 
+
+//the vim structure
+typedef struct {
+    int vim_active;          
+    int vim_mode;            
+    char *original_buffer;  
+    char *clipboard;        
+    size_t cursor_pos;       
+} vim_state_t;
+
+
 // extern char **token_arr;
 
 // Global Variables
@@ -118,6 +134,9 @@ extern int current_history;
 extern reverse_search_state_t search_state; //adding the reverse search extern
 
 
+extern vim_state_t vim_state; //for vim
+
+
 // Function Declarations
 
 // main.c functions
@@ -139,6 +158,14 @@ char* reverse_search();
 void display_search_interface();
 void handle_search_keypress(int key);
 int find_next_match(const char *query, int start_index, int backward);
+
+//vim function declarations
+void enter_vim_mode(char *current_buffer, size_t cursor_pos);
+char* handle_vim_input();
+void handle_vim_keypress(int key);
+void vim_yank_last_command();
+void vim_paste();
+void show_vim_prompt();
 
 // helper functions
 int get_keypress();

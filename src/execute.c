@@ -13,6 +13,10 @@ int current_history = -1;
 //reverse search variables initialization
 reverse_search_state_t search_state = {0};
 
+//vim global var
+vim_state_t vim_state = {0};
+
+
 // Helper function to split the input line by ';'
 char **split_commands(char *input)
 {
@@ -392,6 +396,29 @@ void handle_input(char **inputline, size_t *n, const char *PATH)
                 printf("%s", buffer);
                 fflush(stdout);
             }
+
+
+            //vim input handling
+            else if (ch == CTRL_O) {
+
+                enter_vim_mode(buffer, cursor);
+                
+            
+                char *result = handle_vim_input();
+                if (result) {
+                    strcpy(buffer, result);
+                    pos = strlen(buffer);
+                    cursor = pos;
+                    free(result);
+                }
+                
+                printf("\r\033[K");
+                print_prompt(PATH);
+                printf("%s", buffer);
+                fflush(stdout);
+            }
+
+
             else
             {
                 if (pos < MAX_LINE_LENGTH - 1)
@@ -739,7 +766,7 @@ void handle_search_keypress(int key) {
                 search_state.active = 0;
             }
             break;
-            
+             
         default:
             if (key >= 32 && key <= 126 && search_state.query_len < 255) {
                 search_state.query[search_state.query_len++] = key;
@@ -748,5 +775,160 @@ void handle_search_keypress(int key) {
                                                            history_count - 1, 1);
             }
             break;
+    }
+}
+
+
+// CORE VIM func duh
+
+void enter_vim_mode(char *current_buffer, size_t cursor_pos) {
+    vim_state.vim_active = 1;
+    vim_state.vim_mode = VIM_NORMAL;
+    vim_state.cursor_pos = cursor_pos;
+    
+  
+    if (vim_state.original_buffer) free(vim_state.original_buffer);
+    vim_state.original_buffer = strdup(current_buffer);
+    
+    
+    if (!vim_state.clipboard) {
+        vim_state.clipboard = strdup("");
+    }
+    
+    show_vim_prompt();
+}
+
+void show_vim_prompt() {
+    printf("\r\033[K"); 
+    printf("vim mode active press yy to yank or copy the last command from the session file or buffer to clipboard. Similarly use p to paste from clipboard into the buffer");
+    fflush(stdout);
+}
+
+char* handle_vim_input() {
+    while (vim_state.vim_active) {
+        int key = get_keypress();
+        handle_vim_keypress(key);
+    }
+
+    return strdup(vim_state.original_buffer);
+}
+
+
+//VIM Key handling
+
+void handle_vim_keypress(int key) {
+    static int yank_count = 0; 
+    
+    if (vim_state.vim_mode == VIM_NORMAL) {
+        switch (key) {
+            case 'y':
+                yank_count++;
+                if (yank_count == 2) { 
+                    vim_yank_last_command();
+                    yank_count = 0;
+                }
+                break;
+                
+            case 'p':
+                vim_paste();
+                yank_count = 0;
+                break;
+                
+            case 'i': 
+                vim_state.vim_mode = VIM_INSERT;
+                printf("\r\033[K"); 
+                print_prompt(PATH);
+                printf("%s", vim_state.original_buffer);
+                fflush(stdout);
+                break;
+                
+            case 27: 
+                vim_state.vim_active = 0;
+                yank_count = 0;
+                break;
+            case '\n': 
+                vim_state.vim_active = 0;
+                break;
+                
+            default:
+                yank_count = 0; 
+                break;
+        }
+    } else if (vim_state.vim_mode == VIM_INSERT) {
+      
+        switch (key) {
+            case 27: 
+                vim_state.vim_mode = VIM_NORMAL;
+                show_vim_prompt();
+                break;
+                
+            case '\n': 
+                vim_state.vim_active = 0;
+                break;
+                
+            default:
+                break;
+        }
+    }
+}
+
+//VIM Clipboard func
+
+void vim_yank_last_command() {
+    if (history_count > 0) {
+        char *last_cmd = history[history_count - 1];
+        
+
+        if (vim_state.clipboard) free(vim_state.clipboard);
+        vim_state.clipboard = strdup(last_cmd);
+        
+        printf("\r\033[K"); 
+        printf("Yanked: %s", vim_state.clipboard);
+        fflush(stdout);
+    } else {
+        printf("\r\033[KNo commands in history to yank");
+        fflush(stdout);
+    }
+}
+
+void vim_paste() {
+    if (vim_state.clipboard && strlen(vim_state.clipboard) > 0) {
+        size_t orig_len = strlen(vim_state.original_buffer);
+        size_t clip_len = strlen(vim_state.clipboard);
+        size_t new_len = orig_len + clip_len;
+        
+        char *new_buffer = malloc(new_len + 1);
+        if (new_buffer) {
+            strncpy(new_buffer, vim_state.original_buffer, vim_state.cursor_pos);
+           
+            strcpy(new_buffer + vim_state.cursor_pos, vim_state.clipboard);
+ 
+            strcpy(new_buffer + vim_state.cursor_pos + clip_len, 
+                   vim_state.original_buffer + vim_state.cursor_pos);
+            
+            free(vim_state.original_buffer);
+            vim_state.original_buffer = new_buffer;
+            
+            printf("\r\033[K"); 
+            print_prompt(PATH);
+            printf("%s", vim_state.original_buffer);
+            fflush(stdout);
+        }
+    } else {
+        printf("\r\033[KClipboard is empty");
+        fflush(stdout);
+    }
+}
+
+
+//vim cleanup 
+void cleanup_vim_state() {
+    if (vim_state.original_buffer) {
+        free(vim_state.original_buffer);
+        vim_state.original_buffer = NULL;
+    }
+    if (vim_state.clipboard) {
+        free(vim_state.clipboard);
+        vim_state.clipboard = NULL;
     }
 }
